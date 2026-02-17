@@ -3,24 +3,981 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello World</title>
+    <title>홀덤 승률 계산기</title>
     <style>
+        :root {
+            --bg: #0b1e0f;
+            --felt: #1a472a;
+            --felt-light: #236b3e;
+            --card-bg: #ffffff;
+            --text: #e8e8e8;
+            --text-dim: #8a9a8e;
+            --gold: #f0c040;
+            --red: #e74c3c;
+            --green: #2ecc71;
+            --blue: #3498db;
+            --suit-red: #d63031;
+            --suit-black: #2d3436;
+            --slot-empty: rgba(255,255,255,0.08);
+            --slot-active: rgba(240,192,64,0.25);
+            --radius: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+            padding: 16px 12px 32px;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: 12px 0 16px;
+        }
+        header h1 {
+            font-size: 1.4rem;
+            color: var(--gold);
+            letter-spacing: 1px;
+        }
+        header h1 span { color: var(--text-dim); }
+
+        /* Sections */
+        .section {
+            background: var(--felt);
+            border-radius: var(--radius);
+            padding: 14px;
+            margin-bottom: 12px;
+        }
+        .section-title {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        /* Player Count */
+        .player-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .player-btn {
+            flex: 1;
+            min-width: 40px;
+            padding: 10px 0;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .player-btn:hover { border-color: var(--gold); color: var(--gold); }
+        .player-btn.active {
+            background: var(--gold);
+            color: #000;
+            border-color: var(--gold);
+        }
+
+        /* Card Slots */
+        .slots-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .slots-group {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .slots-group-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-right: 2px;
+            writing-mode: vertical-rl;
+            text-orientation: mixed;
+        }
+        .slot-divider {
+            width: 1px;
+            height: 56px;
+            background: rgba(255,255,255,0.12);
+            margin: 0 4px;
+        }
+        .card-slot {
+            width: 50px;
+            height: 70px;
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: var(--slot-empty);
+            position: relative;
+            user-select: none;
+        }
+        .card-slot.active-slot {
+            border-color: var(--gold);
+            background: var(--slot-active);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(240,192,64,0.3); }
+            50% { box-shadow: 0 0 12px 4px rgba(240,192,64,0.2); }
+        }
+        .card-slot.filled {
+            border-style: solid;
+            border-color: rgba(255,255,255,0.3);
+            background: var(--card-bg);
+        }
+        .card-slot.filled:hover {
+            border-color: var(--red);
+            transform: translateY(-2px);
+        }
+        .card-slot .card-rank {
+            font-size: 1.1rem;
+            font-weight: 700;
+            line-height: 1.1;
+        }
+        .card-slot .card-suit {
+            font-size: 1rem;
+            line-height: 1.1;
+        }
+        .card-slot.suit-red .card-rank,
+        .card-slot.suit-red .card-suit { color: var(--suit-red); }
+        .card-slot.suit-black .card-rank,
+        .card-slot.suit-black .card-suit { color: var(--suit-black); }
+        .card-slot .slot-placeholder {
+            font-size: 1.2rem;
+            color: rgba(255,255,255,0.2);
+        }
+
+        /* My Hand Section */
+        .hand-row {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+        .hand-cards {
+            display: flex;
+            gap: 8px;
+        }
+        .hand-cards .card-slot {
+            width: 60px;
+            height: 84px;
+        }
+        .hand-cards .card-slot .card-rank { font-size: 1.3rem; }
+        .hand-cards .card-slot .card-suit { font-size: 1.2rem; }
+
+        /* Win Rate */
+        .win-rate-box {
+            flex: 1;
+            min-width: 0;
+        }
+        .win-rate-main {
+            font-size: 2rem;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 4px;
+            transition: color 0.3s;
+        }
+        .win-rate-bar {
+            height: 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 6px;
+        }
+        .win-rate-bar-inner {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.4s, background 0.4s;
+            width: 0%;
+        }
+        .win-rate-details {
             display: flex;
             justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0d1117;
-            color: #f0f6fc;
+            gap: 12px;
+            font-size: 0.75rem;
         }
-        h1 {
-            font-size: 3rem;
+        .win-rate-details span { color: var(--text-dim); }
+        .win-rate-details .win { color: var(--green); }
+        .win-rate-details .tie { color: var(--gold); }
+        .win-rate-details .lose { color: var(--red); }
+        .hand-name {
+            text-align: center;
+            margin-top: 6px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--gold);
+            min-height: 1.2em;
+        }
+        .win-rate-placeholder {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            padding: 12px 0;
+        }
+
+        /* Phase Indicator */
+        .phase-indicator {
+            text-align: center;
+            margin-bottom: 8px;
+            font-size: 0.8rem;
+            color: var(--gold);
+            font-weight: 500;
+            min-height: 1.2em;
+        }
+
+        /* Card Picker */
+        .picker-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        .picker-suit-label {
+            width: 22px;
+            text-align: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        .picker-cards {
+            display: flex;
+            gap: 3px;
+            flex: 1;
+        }
+        .picker-card {
+            flex: 1;
+            min-width: 0;
+            aspect-ratio: 0.72;
+            max-height: 52px;
+            border: 1.5px solid rgba(255,255,255,0.15);
+            border-radius: 4px;
+            background: rgba(255,255,255,0.06);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.12s;
+            user-select: none;
+            font-weight: 700;
+        }
+        .picker-card .p-rank {
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+        .picker-card .p-suit {
+            font-size: 0.6rem;
+            line-height: 1;
+        }
+        .picker-card.red { color: var(--suit-red); }
+        .picker-card.black { color: var(--suit-black); }
+        .picker-card:hover:not(.used) {
+            border-color: var(--gold);
+            background: rgba(240,192,64,0.15);
+            transform: scale(1.08);
+        }
+        .picker-card.used {
+            opacity: 0.15;
+            cursor: default;
+            transform: none;
+        }
+
+        /* Buttons */
+        .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            justify-content: center;
+        }
+        .btn {
+            padding: 10px 24px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn:hover { border-color: var(--gold); color: var(--gold); }
+        .btn-reset { border-color: var(--red); color: var(--red); }
+        .btn-reset:hover { background: var(--red); color: #fff; }
+
+        /* Responsive */
+        @media (max-width: 420px) {
+            .container { padding: 8px 6px 24px; }
+            header h1 { font-size: 1.2rem; }
+            .hand-cards .card-slot { width: 52px; height: 72px; }
+            .hand-cards .card-slot .card-rank { font-size: 1.1rem; }
+            .card-slot { width: 44px; height: 62px; }
+            .hand-row { gap: 10px; }
+            .win-rate-main { font-size: 1.6rem; }
+            .picker-card { max-height: 46px; }
+            .picker-card .p-rank { font-size: 0.65rem; }
+            .picker-card .p-suit { font-size: 0.55rem; }
         }
     </style>
 </head>
 <body>
-    <h1>Hello, World!</h1>
+    <div class="container">
+        <header>
+            <h1>♠ 홀덤 승률 계산기 ♥</h1>
+        </header>
+
+        <!-- Player Count -->
+        <div class="section">
+            <div class="section-title">플레이어 수</div>
+            <div class="player-buttons" id="playerButtons"></div>
+        </div>
+
+        <!-- My Hand + Win Rate -->
+        <div class="section">
+            <div class="phase-indicator" id="phaseText"></div>
+            <div class="hand-row">
+                <div>
+                    <div class="section-title" style="margin-bottom:6px">내 핸드</div>
+                    <div class="hand-cards" id="holeSlots"></div>
+                </div>
+                <div class="win-rate-box" id="winRateBox">
+                    <div class="win-rate-placeholder">핸드 카드 2장을 선택하세요</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Community Cards -->
+        <div class="section">
+            <div class="section-title">커뮤니티 카드</div>
+            <div class="slots-row">
+                <div class="slots-group">
+                    <span class="slots-group-label">플랍</span>
+                    <div id="flopSlots" style="display:flex;gap:6px"></div>
+                </div>
+                <div class="slot-divider"></div>
+                <div class="slots-group">
+                    <span class="slots-group-label">턴</span>
+                    <div id="turnSlots" style="display:flex;gap:6px"></div>
+                </div>
+                <div class="slot-divider"></div>
+                <div class="slots-group">
+                    <span class="slots-group-label">리버</span>
+                    <div id="riverSlots" style="display:flex;gap:6px"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Picker -->
+        <div class="section">
+            <div class="section-title">카드 선택</div>
+            <div id="cardPicker"></div>
+            <div class="actions">
+                <button class="btn btn-reset" onclick="resetAll()">전체 리셋</button>
+                <button class="btn" onclick="resetCommunity()">커뮤니티 리셋</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    /* ============================================
+       Constants
+    ============================================ */
+    const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+    const SUITS = ['♠','♥','♦','♣'];
+    const SUIT_COLORS = [false, true, true, false]; // true = red
+    const HAND_NAMES = [
+        '하이 카드', '원 페어', '투 페어', '트리플',
+        '스트레이트', '플러시', '풀하우스', '포카드',
+        '스트레이트 플러시'
+    ];
+
+    function cardRank(c) { return c >> 2; }
+    function cardSuit(c) { return c & 3; }
+    function rankStr(c) { return RANKS[cardRank(c)]; }
+    function suitStr(c) { return SUITS[cardSuit(c)]; }
+    function isRed(c) { return SUIT_COLORS[cardSuit(c)]; }
+
+    /* ============================================
+       State
+    ============================================ */
+    let playerCount = 6;
+    let holeCards = [];       // max 2
+    let communityCards = [];  // max 5
+    let usedCards = new Set();
+    let simWorker = null;
+    let simVersion = 0;      // to discard stale results
+
+    // Slot order: hole0, hole1, flop0, flop1, flop2, turn, river
+    function getActiveSlotIndex() {
+        if (holeCards.length < 2) return holeCards.length; // 0 or 1
+        return 2 + communityCards.length; // 2..6
+    }
+    function totalSelected() { return holeCards.length + communityCards.length; }
+
+    /* ============================================
+       Web Worker for Monte Carlo
+    ============================================ */
+    const workerCode = `
+    function cardRank(c) { return c >> 2; }
+    function cardSuit(c) { return c & 3; }
+
+    function evaluate5(c0, c1, c2, c3, c4) {
+        var r0 = c0 >> 2, r1 = c1 >> 2, r2 = c2 >> 2, r3 = c3 >> 2, r4 = c4 >> 2;
+        var s0 = c0 & 3, s1 = c1 & 3, s2 = c2 & 3, s3 = c3 & 3, s4 = c4 & 3;
+
+        // Sort ranks descending (simple network sort for 5 elements)
+        var t;
+        if (r0 < r1) { t=r0; r0=r1; r1=t; }
+        if (r3 < r4) { t=r3; r3=r4; r4=t; }
+        if (r0 < r2) { t=r0; r0=r2; r2=t; }
+        if (r1 < r2) { t=r1; r1=r2; r2=t; }
+        if (r0 < r3) { t=r0; r0=r3; r3=t; }
+        if (r2 < r4) { t=r2; r2=r4; r4=t; }
+        if (r1 < r3) { t=r1; r1=r3; r3=t; }
+        if (r2 < r3) { t=r2; r2=r3; r3=t; }
+        if (r3 < r4) { t=r3; r3=r4; r4=t; }
+        // now r0 >= r1 >= r2 >= r3 >= r4
+
+        var isFlush = (s0 === s1 && s1 === s2 && s2 === s3 && s3 === s4);
+
+        // Straight check
+        var isStraight = false, straightHigh = r0;
+        if (r0-r4===4 && r0!==r1 && r1!==r2 && r2!==r3 && r3!==r4) {
+            isStraight = true;
+        } else if (r0===12 && r1===3 && r2===2 && r3===1 && r4===0) {
+            isStraight = true;
+            straightHigh = 3; // 5-high (wheel)
+        }
+
+        // Count frequencies
+        var counts = new Int8Array(13);
+        counts[r0]++; counts[r1]++; counts[r2]++; counts[r3]++; counts[r4]++;
+
+        // Find groups (iterate high to low)
+        var quads = -1, trips = -1, pair1 = -1, pair2 = -1;
+        var singles = [];
+        for (var i = 12; i >= 0; i--) {
+            if (counts[i] === 4) quads = i;
+            else if (counts[i] === 3) trips = i;
+            else if (counts[i] === 2) {
+                if (pair1 === -1) pair1 = i; else pair2 = i;
+            }
+            else if (counts[i] === 1) singles.push(i);
+        }
+
+        // Encode hand value: type * 15^5 + v0*15^4 + v1*15^3 + v2*15^2 + v3*15 + v4
+        // Using base 15 since max rank is 12
+        var P = 759375; // 15^5
+        var s0v, s1v, s2v, s3v, s4v;
+
+        if (isFlush && isStraight) {
+            return 8*P + straightHigh*50625;
+        }
+        if (quads !== -1) {
+            var k = singles.length ? singles[0] : (trips !== -1 ? trips : pair1);
+            return 7*P + quads*50625 + k*3375;
+        }
+        if (trips !== -1 && pair1 !== -1) {
+            return 6*P + trips*50625 + pair1*3375;
+        }
+        if (isFlush) {
+            return 5*P + r0*50625 + r1*3375 + r2*225 + r3*15 + r4;
+        }
+        if (isStraight) {
+            return 4*P + straightHigh*50625;
+        }
+        if (trips !== -1) {
+            return 3*P + trips*50625 + singles[0]*3375 + singles[1]*225;
+        }
+        if (pair1 !== -1 && pair2 !== -1) {
+            return 2*P + pair1*50625 + pair2*3375 + singles[0]*225;
+        }
+        if (pair1 !== -1) {
+            return 1*P + pair1*50625 + singles[0]*3375 + singles[1]*225 + singles[2]*15;
+        }
+        return r0*50625 + r1*3375 + r2*225 + r3*15 + r4;
+    }
+
+    // Combinations C(7,5): indices of 2 cards to EXCLUDE
+    var COMBOS_EXCLUDE = [
+        [0,1],[0,2],[0,3],[0,4],[0,5],[0,6],
+        [1,2],[1,3],[1,4],[1,5],[1,6],
+        [2,3],[2,4],[2,5],[2,6],
+        [3,4],[3,5],[3,6],
+        [4,5],[4,6],
+        [5,6]
+    ];
+
+    function bestOf7(cards) {
+        var best = 0;
+        for (var ci = 0; ci < 21; ci++) {
+            var ex = COMBOS_EXCLUDE[ci];
+            var hand = [];
+            for (var i = 0; i < 7; i++) {
+                if (i !== ex[0] && i !== ex[1]) hand.push(cards[i]);
+            }
+            var v = evaluate5(hand[0], hand[1], hand[2], hand[3], hand[4]);
+            if (v > best) best = v;
+        }
+        return best;
+    }
+
+    function handType(value) {
+        return Math.floor(value / 759375);
+    }
+
+    // Partial Fisher-Yates: shuffle first n elements
+    function partialShuffle(arr, n) {
+        for (var i = 0; i < n && i < arr.length; i++) {
+            var j = i + Math.floor(Math.random() * (arr.length - i));
+            var t = arr[i]; arr[i] = arr[j]; arr[j] = t;
+        }
+    }
+
+    self.onmessage = function(e) {
+        var d = e.data;
+        var holeCards = d.holeCards;
+        var commCards = d.communityCards;
+        var numPlayers = d.playerCount;
+        var numSims = d.numSimulations;
+        var version = d.version;
+
+        var known = new Set();
+        for (var i = 0; i < holeCards.length; i++) known.add(holeCards[i]);
+        for (var i = 0; i < commCards.length; i++) known.add(commCards[i]);
+
+        var deck = [];
+        for (var i = 0; i < 52; i++) {
+            if (!known.has(i)) deck.push(i);
+        }
+
+        var commNeeded = 5 - commCards.length;
+        var cardsNeeded = commNeeded + (numPlayers - 1) * 2;
+
+        var wins = 0, ties = 0, losses = 0;
+        var myHandType = -1;
+
+        for (var sim = 0; sim < numSims; sim++) {
+            partialShuffle(deck, cardsNeeded);
+            var idx = 0;
+
+            // Fill community
+            var allComm = commCards.slice();
+            for (var c = 0; c < commNeeded; c++) {
+                allComm.push(deck[idx++]);
+            }
+
+            // My hand
+            var myCards = [holeCards[0], holeCards[1], allComm[0], allComm[1], allComm[2], allComm[3], allComm[4]];
+            var myVal = bestOf7(myCards);
+            if (sim === 0) myHandType = handType(myVal);
+
+            // Opponent hands
+            var beaten = false, tied = false;
+            for (var p = 1; p < numPlayers; p++) {
+                var oppCards = [deck[idx], deck[idx+1], allComm[0], allComm[1], allComm[2], allComm[3], allComm[4]];
+                idx += 2;
+                var oppVal = bestOf7(oppCards);
+                if (oppVal > myVal) { beaten = true; break; }
+                else if (oppVal === myVal) { tied = true; }
+            }
+
+            if (beaten) losses++;
+            else if (tied) ties++;
+            else wins++;
+
+            // Send progress every 2000 sims
+            if ((sim + 1) % 2000 === 0) {
+                var done = sim + 1;
+                self.postMessage({
+                    version: version,
+                    progress: true,
+                    win: wins / done,
+                    tie: ties / done,
+                    lose: losses / done,
+                    done: done,
+                    total: numSims,
+                    handType: myHandType
+                });
+            }
+        }
+
+        // Also compute hand type from known cards if 5+ total
+        if (holeCards.length + commCards.length >= 5) {
+            var knownCards = holeCards.concat(commCards);
+            if (knownCards.length === 5) {
+                myHandType = handType(evaluate5(knownCards[0],knownCards[1],knownCards[2],knownCards[3],knownCards[4]));
+            } else if (knownCards.length === 6) {
+                var best6 = 0;
+                for (var i = 0; i < 6; i++) {
+                    var h = [];
+                    for (var j = 0; j < 6; j++) { if (j!==i) h.push(knownCards[j]); }
+                    var v = evaluate5(h[0],h[1],h[2],h[3],h[4]);
+                    if (v > best6) best6 = v;
+                }
+                myHandType = handType(best6);
+            } else if (knownCards.length === 7) {
+                myHandType = handType(bestOf7(knownCards));
+            }
+        }
+
+        self.postMessage({
+            version: version,
+            progress: false,
+            win: wins / numSims,
+            tie: ties / numSims,
+            lose: losses / numSims,
+            done: numSims,
+            total: numSims,
+            handType: myHandType
+        });
+    };
+    `;
+
+    function createWorker() {
+        if (simWorker) simWorker.terminate();
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        simWorker = new Worker(URL.createObjectURL(blob));
+        simWorker.onmessage = function(e) {
+            const d = e.data;
+            if (d.version !== simVersion) return; // stale
+            renderWinRate(d);
+        };
+    }
+    createWorker();
+
+    /* ============================================
+       Hand Evaluation (main thread, for display)
+    ============================================ */
+    function evaluate5Main(c0,c1,c2,c3,c4) {
+        var r = [c0>>2, c1>>2, c2>>2, c3>>2, c4>>2].sort((a,b)=>b-a);
+        var s = [c0&3, c1&3, c2&3, c3&3, c4&3];
+        var isFlush = s.every(x=>x===s[0]);
+        var isStraight = false, straightHigh = r[0];
+        if (r[0]-r[4]===4 && new Set(r).size===5) isStraight=true;
+        else if (r[0]===12&&r[1]===3&&r[2]===2&&r[3]===1&&r[4]===0) { isStraight=true; straightHigh=3; }
+
+        var cnt = new Array(13).fill(0);
+        r.forEach(x=>cnt[x]++);
+        var quads=-1,trips=-1,p1=-1,p2=-1,singles=[];
+        for(var i=12;i>=0;i--){
+            if(cnt[i]===4)quads=i;
+            else if(cnt[i]===3)trips=i;
+            else if(cnt[i]===2){if(p1===-1)p1=i;else p2=i;}
+            else if(cnt[i]===1)singles.push(i);
+        }
+        if(isFlush&&isStraight) return {type:8, high:straightHigh};
+        if(quads!==-1) return {type:7};
+        if(trips!==-1&&p1!==-1) return {type:6};
+        if(isFlush) return {type:5};
+        if(isStraight) return {type:4};
+        if(trips!==-1) return {type:3};
+        if(p1!==-1&&p2!==-1) return {type:2};
+        if(p1!==-1) return {type:1};
+        return {type:0};
+    }
+
+    function getCurrentHandName() {
+        const all = [...holeCards, ...communityCards];
+        if (all.length < 5) return null;
+        let bestType = -1;
+        if (all.length === 5) {
+            const r = evaluate5Main(all[0],all[1],all[2],all[3],all[4]);
+            bestType = r.type;
+            if (r.type===8 && r.high===12) return '로열 플러시';
+        } else if (all.length === 6) {
+            for (let i=0;i<6;i++){
+                const h=all.filter((_,j)=>j!==i);
+                const r=evaluate5Main(h[0],h[1],h[2],h[3],h[4]);
+                if(r.type>bestType) { bestType=r.type; if(r.type===8&&r.high===12) return '로열 플러시'; }
+            }
+        } else if (all.length === 7) {
+            for(let i=0;i<7;i++) for(let j=i+1;j<7;j++){
+                const h=all.filter((_,k)=>k!==i&&k!==j);
+                const r=evaluate5Main(h[0],h[1],h[2],h[3],h[4]);
+                if(r.type>bestType) { bestType=r.type; if(r.type===8&&r.high===12) return '로열 플러시'; }
+            }
+        }
+        if (bestType >= 0) return HAND_NAMES[bestType];
+        return null;
+    }
+
+    /* ============================================
+       Simulation Trigger
+    ============================================ */
+    function triggerSimulation() {
+        simVersion++;
+        if (holeCards.length < 2) {
+            renderWinRate(null);
+            return;
+        }
+        simWorker.postMessage({
+            holeCards: holeCards.slice(),
+            communityCards: communityCards.slice(),
+            playerCount: playerCount,
+            numSimulations: 15000,
+            version: simVersion
+        });
+        // Show loading state
+        renderWinRate({ loading: true });
+    }
+
+    /* ============================================
+       UI Rendering
+    ============================================ */
+    function renderPlayerButtons() {
+        const container = document.getElementById('playerButtons');
+        container.innerHTML = '';
+        for (let n = 2; n <= 10; n++) {
+            const btn = document.createElement('button');
+            btn.className = 'player-btn' + (n === playerCount ? ' active' : '');
+            btn.textContent = n;
+            btn.onclick = () => {
+                playerCount = n;
+                renderPlayerButtons();
+                triggerSimulation();
+            };
+            container.appendChild(btn);
+        }
+    }
+
+    function createSlot(cardId, isActive, slotIndex) {
+        const div = document.createElement('div');
+        div.className = 'card-slot';
+        if (cardId !== null && cardId !== undefined) {
+            div.classList.add('filled');
+            div.classList.add(isRed(cardId) ? 'suit-red' : 'suit-black');
+            div.innerHTML = `<span class="card-rank">${rankStr(cardId)}</span><span class="card-suit">${suitStr(cardId)}</span>`;
+            div.onclick = () => removeCard(slotIndex);
+        } else {
+            if (isActive) div.classList.add('active-slot');
+            div.innerHTML = '<span class="slot-placeholder">?</span>';
+        }
+        return div;
+    }
+
+    function renderSlots() {
+        const activeIdx = getActiveSlotIndex();
+
+        // Hole cards
+        const holeSlotsEl = document.getElementById('holeSlots');
+        holeSlotsEl.innerHTML = '';
+        for (let i = 0; i < 2; i++) {
+            const card = i < holeCards.length ? holeCards[i] : null;
+            holeSlotsEl.appendChild(createSlot(card, activeIdx === i, i));
+        }
+
+        // Flop
+        const flopEl = document.getElementById('flopSlots');
+        flopEl.innerHTML = '';
+        for (let i = 0; i < 3; i++) {
+            const card = i < communityCards.length ? communityCards[i] : null;
+            flopEl.appendChild(createSlot(card, activeIdx === 2 + i, 2 + i));
+        }
+
+        // Turn
+        const turnEl = document.getElementById('turnSlots');
+        turnEl.innerHTML = '';
+        const turnCard = communityCards.length > 3 ? communityCards[3] : null;
+        turnEl.appendChild(createSlot(turnCard, activeIdx === 5, 5));
+
+        // River
+        const riverEl = document.getElementById('riverSlots');
+        riverEl.innerHTML = '';
+        const riverCard = communityCards.length > 4 ? communityCards[4] : null;
+        riverEl.appendChild(createSlot(riverCard, activeIdx === 6, 6));
+
+        // Phase text
+        const phaseEl = document.getElementById('phaseText');
+        if (holeCards.length < 2) {
+            phaseEl.textContent = `핸드 카드를 선택하세요 (${holeCards.length}/2)`;
+        } else if (communityCards.length < 3) {
+            phaseEl.textContent = `플랍 카드를 선택하세요 (${communityCards.length}/3)`;
+        } else if (communityCards.length < 4) {
+            phaseEl.textContent = '턴 카드를 선택하세요';
+        } else if (communityCards.length < 5) {
+            phaseEl.textContent = '리버 카드를 선택하세요';
+        } else {
+            phaseEl.textContent = '모든 카드가 선택되었습니다';
+        }
+    }
+
+    function renderWinRate(data) {
+        const box = document.getElementById('winRateBox');
+        if (!data) {
+            box.innerHTML = '<div class="win-rate-placeholder">핸드 카드 2장을 선택하세요</div>';
+            return;
+        }
+        if (data.loading) {
+            const handName = getCurrentHandName();
+            box.innerHTML = `
+                <div class="win-rate-main" style="color:var(--text-dim)">계산중...</div>
+                <div class="win-rate-bar"><div class="win-rate-bar-inner" style="width:0%"></div></div>
+                <div class="win-rate-details"><span>시뮬레이션 진행중</span></div>
+                ${handName ? '<div class="hand-name">' + handName + '</div>' : '<div class="hand-name"></div>'}
+            `;
+            return;
+        }
+
+        const winPct = (data.win * 100).toFixed(1);
+        const tiePct = (data.tie * 100).toFixed(1);
+        const losePct = (data.lose * 100).toFixed(1);
+
+        let color;
+        if (data.win > 0.6) color = 'var(--green)';
+        else if (data.win > 0.4) color = 'var(--gold)';
+        else color = 'var(--red)';
+
+        let barColor;
+        if (data.win > 0.6) barColor = '#2ecc71';
+        else if (data.win > 0.4) barColor = '#f0c040';
+        else barColor = '#e74c3c';
+
+        // Hand name
+        let handName = '';
+        if (data.handType !== undefined && data.handType >= 0) {
+            if (data.handType === 8) {
+                // Check if it's royal flush from known cards
+                const knownHN = getCurrentHandName();
+                handName = knownHN || HAND_NAMES[data.handType];
+            } else {
+                handName = getCurrentHandName() || HAND_NAMES[data.handType] || '';
+            }
+        } else {
+            handName = getCurrentHandName() || '';
+        }
+
+        box.innerHTML = `
+            <div class="win-rate-main" style="color:${color}">${winPct}%</div>
+            <div class="win-rate-bar"><div class="win-rate-bar-inner" style="width:${winPct}%;background:${barColor}"></div></div>
+            <div class="win-rate-details">
+                <span class="win">승 ${winPct}%</span>
+                <span class="tie">무 ${tiePct}%</span>
+                <span class="lose">패 ${losePct}%</span>
+            </div>
+            ${handName ? '<div class="hand-name">' + handName + '</div>' : '<div class="hand-name"></div>'}
+        `;
+    }
+
+    function renderPicker() {
+        const picker = document.getElementById('cardPicker');
+        picker.innerHTML = '';
+        // Display from high rank to low: A K Q J 10 9 8 7 6 5 4 3 2
+        for (let s = 0; s < 4; s++) {
+            const row = document.createElement('div');
+            row.className = 'picker-row';
+
+            const label = document.createElement('div');
+            label.className = 'picker-suit-label';
+            label.textContent = SUITS[s];
+            label.style.color = SUIT_COLORS[s] ? 'var(--suit-red)' : 'var(--text-dim)';
+            row.appendChild(label);
+
+            const cardsDiv = document.createElement('div');
+            cardsDiv.className = 'picker-cards';
+
+            for (let r = 12; r >= 0; r--) {
+                const cardId = r * 4 + s;
+                const card = document.createElement('div');
+                card.className = 'picker-card ' + (SUIT_COLORS[s] ? 'red' : 'black');
+                if (usedCards.has(cardId)) card.classList.add('used');
+                card.innerHTML = `<span class="p-rank">${RANKS[r]}</span><span class="p-suit">${SUITS[s]}</span>`;
+                card.dataset.card = cardId;
+                if (!usedCards.has(cardId)) {
+                    card.onclick = () => selectCard(cardId);
+                }
+                cardsDiv.appendChild(card);
+            }
+            row.appendChild(cardsDiv);
+            picker.appendChild(row);
+        }
+    }
+
+    /* ============================================
+       Card Selection Logic
+    ============================================ */
+    function selectCard(cardId) {
+        if (usedCards.has(cardId)) return;
+        if (totalSelected() >= 7) return;
+
+        if (holeCards.length < 2) {
+            holeCards.push(cardId);
+        } else if (communityCards.length < 5) {
+            communityCards.push(cardId);
+        } else {
+            return;
+        }
+
+        usedCards.add(cardId);
+        renderSlots();
+        renderPicker();
+        triggerSimulation();
+    }
+
+    function removeCard(slotIndex) {
+        let cardId;
+        if (slotIndex < 2) {
+            // Removing a hole card: also clear all community cards
+            if (slotIndex >= holeCards.length) return;
+            // Remove this hole card and everything after
+            const removed = holeCards.splice(slotIndex);
+            const removedComm = communityCards.splice(0);
+            removed.concat(removedComm).forEach(c => usedCards.delete(c));
+        } else {
+            // Removing a community card: remove it and everything after
+            const commIdx = slotIndex - 2;
+            if (commIdx >= communityCards.length) return;
+            const removed = communityCards.splice(commIdx);
+            removed.forEach(c => usedCards.delete(c));
+        }
+
+        renderSlots();
+        renderPicker();
+        triggerSimulation();
+    }
+
+    function resetAll() {
+        holeCards = [];
+        communityCards = [];
+        usedCards.clear();
+        simVersion++;
+        renderSlots();
+        renderPicker();
+        renderWinRate(null);
+    }
+
+    function resetCommunity() {
+        communityCards.forEach(c => usedCards.delete(c));
+        communityCards = [];
+        simVersion++;
+        renderSlots();
+        renderPicker();
+        triggerSimulation();
+    }
+
+    /* ============================================
+       Init
+    ============================================ */
+    renderPlayerButtons();
+    renderSlots();
+    renderPicker();
+    </script>
 </body>
 </html>
