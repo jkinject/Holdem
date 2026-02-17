@@ -322,6 +322,122 @@
         .btn-reset { border-color: var(--red); color: var(--red); }
         .btn-reset:hover { background: var(--red); color: #fff; }
 
+        /* Betting Style */
+        .style-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .style-btn {
+            padding: 10px 8px;
+            border: 2px solid rgba(255,255,255,0.15);
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.15s;
+            text-align: center;
+        }
+        .style-btn:hover { border-color: var(--gold); }
+        .style-btn.active {
+            background: rgba(240,192,64,0.15);
+            border-color: var(--gold);
+        }
+        .style-btn .style-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+        .style-btn .style-desc {
+            font-size: 0.68rem;
+            color: var(--text-dim);
+            line-height: 1.3;
+        }
+        .style-btn.active .style-name { color: var(--gold); }
+
+        /* Action Recommendation */
+        .action-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .action-scenario {
+            background: rgba(0,0,0,0.25);
+            border-radius: 6px;
+            padding: 10px;
+            text-align: center;
+        }
+        .action-scenario-title {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .action-primary {
+            font-size: 1.2rem;
+            font-weight: 800;
+            margin-bottom: 2px;
+        }
+        .action-alt {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            min-height: 1em;
+        }
+        .action-reason {
+            margin-top: 10px;
+            font-size: 0.78rem;
+            color: var(--text-dim);
+            text-align: center;
+            padding: 8px 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 4px;
+            line-height: 1.4;
+        }
+        .action-fold { color: var(--red); }
+        .action-check { color: var(--text-dim); }
+        .action-call { color: var(--blue); }
+        .action-bet { color: var(--green); }
+        .action-raise { color: var(--gold); }
+        .action-allin { color: #ff6b6b; }
+        .action-placeholder {
+            text-align: center;
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            padding: 16px 0;
+        }
+        .style-tag {
+            display: inline-block;
+            background: rgba(240,192,64,0.15);
+            color: var(--gold);
+            font-size: 0.7rem;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+        .action-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            justify-content: center;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+        .action-legend-item {
+            font-size: 0.65rem;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .action-legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
         /* Responsive */
         @media (max-width: 420px) {
             .container { padding: 8px 6px 24px; }
@@ -334,6 +450,11 @@
             .picker-card { max-height: 46px; }
             .picker-card .p-rank { font-size: 0.65rem; }
             .picker-card .p-suit { font-size: 0.55rem; }
+            .style-grid { gap: 6px; }
+            .style-btn { padding: 8px 6px; }
+            .style-btn .style-name { font-size: 0.78rem; }
+            .style-btn .style-desc { font-size: 0.62rem; }
+            .action-primary { font-size: 1rem; }
         }
     </style>
 </head>
@@ -342,6 +463,12 @@
         <header>
             <h1>♠ 홀덤 승률 계산기 ♥</h1>
         </header>
+
+        <!-- Betting Style -->
+        <div class="section">
+            <div class="section-title">베팅 스타일</div>
+            <div class="style-grid" id="styleButtons"></div>
+        </div>
 
         <!-- Player Count -->
         <div class="section">
@@ -393,6 +520,14 @@
                 <button class="btn" onclick="resetCommunity()">커뮤니티 리셋</button>
             </div>
         </div>
+
+        <!-- Action Recommendation -->
+        <div class="section" id="actionSection">
+            <div class="section-title">액션 추천</div>
+            <div id="actionContent">
+                <div class="action-placeholder">베팅 스타일과 핸드를 선택하면 액션을 추천합니다</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -417,6 +552,8 @@
     /* ============================================
        State
     ============================================ */
+    let bettingStyle = null;  // 'TAG', 'LAG', 'TP', 'LP'
+    let lastSimResult = null; // latest sim data for action recommendation
     let playerCount = 6;
     let holeCards = [];       // max 2
     let communityCards = [];  // max 5
@@ -822,8 +959,14 @@
     function renderWinRate(data) {
         const box = document.getElementById('winRateBox');
         if (!data) {
+            lastSimResult = null;
             box.innerHTML = '<div class="win-rate-placeholder">핸드 카드 2장을 선택하세요</div>';
+            renderActionRecommendation();
             return;
+        }
+        if (data && !data.loading) {
+            lastSimResult = data;
+            renderActionRecommendation();
         }
         if (data.loading) {
             const handName = getCurrentHandName();
@@ -911,6 +1054,250 @@
     }
 
     /* ============================================
+       Betting Style
+    ============================================ */
+    const BETTING_STYLES = [
+        { id: 'TAG', name: '공격형', desc: '확실할 때만 참여하고 크게 베팅', icon: '🔥' },
+        { id: 'LAG', name: '도전형', desc: '자주 참여하면서 크게 베팅', icon: '💣' },
+        { id: 'TP',  name: '신중형', desc: '확실할 때만 참여하고 조용히 베팅', icon: '🛡️' },
+        { id: 'LP',  name: '관망형', desc: '자주 참여하면서 조용히 따라가기', icon: '🐢' },
+    ];
+
+    function renderBettingStyleButtons() {
+        const container = document.getElementById('styleButtons');
+        container.innerHTML = '';
+        BETTING_STYLES.forEach(s => {
+            const btn = document.createElement('button');
+            btn.className = 'style-btn' + (bettingStyle === s.id ? ' active' : '');
+            btn.innerHTML = `<div class="style-name">${s.icon} ${s.name}</div><div class="style-desc">${s.desc}</div>`;
+            btn.onclick = () => {
+                bettingStyle = s.id;
+                renderBettingStyleButtons();
+                renderActionRecommendation();
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    /* ============================================
+       Action Recommendation
+    ============================================ */
+    function getPhase() {
+        if (holeCards.length < 2) return null;
+        if (communityCards.length === 0) return 'preflop';
+        if (communityCards.length <= 3) return 'flop';
+        if (communityCards.length === 4) return 'turn';
+        return 'river';
+    }
+
+    function getPhaseLabel(phase) {
+        const labels = { preflop: '카드 공개 전', flop: '3장 공개', turn: '4장 공개', river: '5장 공개' };
+        return labels[phase] || '';
+    }
+
+    function getActionRecommendation(winPct, phase, style) {
+        let first = {}, respond = {}, reason = '';
+
+        if (style === 'TAG') {
+            if (phase === 'preflop') {
+                if (winPct >= 60) {
+                    first   = { action: '레이즈', cls: 'action-raise', alt: '크게 올려서 베팅' };
+                    respond = { action: '레이즈', cls: 'action-raise', alt: '더 크게 올리기' };
+                    reason  = '아주 좋은 패입니다! 자신있게 크게 올리세요.';
+                } else if (winPct >= 45) {
+                    first   = { action: '레이즈', cls: 'action-raise', alt: '적당히 올려서 베팅' };
+                    respond = { action: '콜', cls: 'action-call', alt: '따라가되, 여유 있으면 올리기' };
+                    reason  = '괜찮은 패입니다. 먼저라면 올리고, 아니면 따라가세요.';
+                } else if (winPct >= 35) {
+                    first   = { action: '콜', cls: 'action-call', alt: '자리가 좋을 때만' };
+                    respond = { action: '콜', cls: 'action-call', alt: '부담 없으면 따라가기' };
+                    reason  = '보통 패입니다. 상황이 좋을 때만 참여하세요.';
+                } else {
+                    first   = { action: '폴드', cls: 'action-fold', alt: '포기하세요' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '미련 없이 포기' };
+                    reason  = '안 좋은 패입니다. 돈을 아끼세요.';
+                }
+            } else {
+                if (winPct >= 65) {
+                    first   = { action: '벳', cls: 'action-bet', alt: '크게 걸기' };
+                    respond = { action: '레이즈', cls: 'action-raise', alt: '더 크게 올리기' };
+                    reason  = '이기고 있어요! 크게 걸어서 돈을 더 따세요.';
+                } else if (winPct >= 50) {
+                    first   = { action: '벳', cls: 'action-bet', alt: '적당히 걸기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '상황 봐서 올리기' };
+                    reason  = '유리해요. 적당히 베팅하세요.';
+                } else if (winPct >= 35) {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '많이 걸면 포기 고려' };
+                    reason  = '애매해요. 돈을 크게 안 쓰고 지켜보세요.';
+                } else {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '깔끔하게 포기' };
+                    reason  = '불리해요. 넘기고 상대가 걸면 포기하세요.';
+                }
+            }
+        } else if (style === 'LAG') {
+            if (phase === 'preflop') {
+                if (winPct >= 55) {
+                    first   = { action: '레이즈', cls: 'action-raise', alt: '확 크게 올리기' };
+                    respond = { action: '레이즈', cls: 'action-raise', alt: '되올려서 압박' };
+                    reason  = '좋은 패! 크게 올려서 상대를 압박하세요.';
+                } else if (winPct >= 35) {
+                    first   = { action: '레이즈', cls: 'action-raise', alt: '올려서 흔들기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '가끔 허세로 올리기' };
+                    reason  = '올려서 상대를 고민하게 만드세요!';
+                } else if (winPct >= 25) {
+                    first   = { action: '레이즈', cls: 'action-raise', alt: '허세로 올리기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '나중에 좋아질 수 있음' };
+                    reason  = '허세로 올려서 상대를 겁먹게 하세요.';
+                } else {
+                    first   = { action: '폴드', cls: 'action-fold', alt: '가끔 허세 올리기' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '' };
+                    reason  = '안 좋은 패. 포기하되, 가끔 허세를 섞어보세요.';
+                }
+            } else {
+                if (winPct >= 60) {
+                    first   = { action: '벳', cls: 'action-bet', alt: '크게 걸기' };
+                    respond = { action: '레이즈', cls: 'action-raise', alt: '크게 올리기' };
+                    reason  = '이기고 있어요! 최대한 많이 따세요.';
+                } else if (winPct >= 40) {
+                    first   = { action: '벳', cls: 'action-bet', alt: '걸어서 흔들기' };
+                    respond = { action: '레이즈', cls: 'action-raise', alt: '올려서 겁주기' };
+                    reason  = '베팅해서 상대를 흔드세요. 좋아질 수 있어요.';
+                } else if (winPct >= 25) {
+                    first   = { action: '벳', cls: 'action-bet', alt: '허세 베팅' };
+                    respond = { action: '콜', cls: 'action-call', alt: '적으면 따라가기' };
+                    reason  = '허세 베팅으로 상대를 포기시키세요.';
+                } else {
+                    first   = { action: '체크', cls: 'action-check', alt: '가끔 허세 베팅' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '' };
+                    reason  = '불리해요. 넘기고 기회를 노리세요.';
+                }
+            }
+        } else if (style === 'TP') {
+            if (phase === 'preflop') {
+                if (winPct >= 60) {
+                    first   = { action: '콜', cls: 'action-call', alt: '가끔 올리기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '안전하게 따라가기' };
+                    reason  = '좋은 패입니다. 안전하게 따라가세요.';
+                } else if (winPct >= 45) {
+                    first   = { action: '콜', cls: 'action-call', alt: '최소 금액으로 참여' };
+                    respond = { action: '콜', cls: 'action-call', alt: '많이 올리면 포기' };
+                    reason  = '나쁘지 않아요. 따라가서 다음 카드를 보세요.';
+                } else {
+                    first   = { action: '폴드', cls: 'action-fold', alt: '' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '' };
+                    reason  = '안 좋은 패입니다. 안전하게 포기하세요.';
+                }
+            } else {
+                if (winPct >= 65) {
+                    first   = { action: '벳', cls: 'action-bet', alt: '조금만 걸기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '안전하게 따라가기' };
+                    reason  = '이기고 있어요. 조금씩 걸어보세요.';
+                } else if (winPct >= 45) {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '따라가기' };
+                    reason  = '괜찮아요. 넘기거나 따라가세요.';
+                } else if (winPct >= 30) {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '체크', cls: 'action-check', alt: '많이 걸면 포기' };
+                    reason  = '좀 불리해요. 넘기고 지켜보세요.';
+                } else {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '포기하세요' };
+                    reason  = '불리해요. 넘긴 후 상대가 걸면 포기하세요.';
+                }
+            }
+        } else if (style === 'LP') {
+            if (phase === 'preflop') {
+                if (winPct >= 50) {
+                    first   = { action: '콜', cls: 'action-call', alt: '따라가기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '따라가기' };
+                    reason  = '괜찮은 패! 따라가서 구경하세요.';
+                } else if (winPct >= 30) {
+                    first   = { action: '콜', cls: 'action-call', alt: '최소 금액으로 참여' };
+                    respond = { action: '콜', cls: 'action-call', alt: '많이 올리면 포기' };
+                    reason  = '다음 카드 보고 싶으면 따라가세요.';
+                } else if (winPct >= 20) {
+                    first   = { action: '콜', cls: 'action-call', alt: '싸면 참여' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '적으면 따라가기' };
+                    reason  = '좀 약하지만 싸게 볼 수 있으면 참여하세요.';
+                } else {
+                    first   = { action: '폴드', cls: 'action-fold', alt: '' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '' };
+                    reason  = '너무 안 좋아요. 이번은 포기하세요.';
+                }
+            } else {
+                if (winPct >= 55) {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '따라가기' };
+                    reason  = '괜찮아요. 따라가세요.';
+                } else if (winPct >= 35) {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '따라가기' };
+                    reason  = '넘기고, 상대가 걸면 따라가보세요.';
+                } else if (winPct >= 20) {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '콜', cls: 'action-call', alt: '조금만 걸면 따라가기' };
+                    reason  = '좀 불리해요. 적게 걸면 따라가보세요.';
+                } else {
+                    first   = { action: '체크', cls: 'action-check', alt: '넘기기' };
+                    respond = { action: '폴드', cls: 'action-fold', alt: '포기하세요' };
+                    reason  = '안 좋아요. 넘긴 후 포기하세요.';
+                }
+            }
+        }
+
+        return { first, respond, reason };
+    }
+
+    function renderActionRecommendation() {
+        const container = document.getElementById('actionContent');
+        const phase = getPhase();
+
+        if (!bettingStyle) {
+            container.innerHTML = '<div class="action-placeholder">베팅 스타일을 먼저 선택하세요</div>';
+            return;
+        }
+        if (!phase || !lastSimResult) {
+            container.innerHTML = '<div class="action-placeholder">핸드 카드 2장을 선택하면 액션을 추천합니다</div>';
+            return;
+        }
+
+        const winPct = lastSimResult.win * 100;
+        const rec = getActionRecommendation(winPct, phase, bettingStyle);
+        const styleInfo = BETTING_STYLES.find(s => s.id === bettingStyle);
+        const phaseLabel = getPhaseLabel(phase);
+
+        container.innerHTML = `
+            <div style="text-align:center;margin-bottom:8px">
+                <span class="style-tag">${styleInfo.icon} ${styleInfo.name}</span>
+                <span class="style-tag" style="margin-left:4px">${phaseLabel}</span>
+            </div>
+            <div class="action-grid">
+                <div class="action-scenario">
+                    <div class="action-scenario-title">내가 먼저 액션</div>
+                    <div class="action-primary ${rec.first.cls}">${rec.first.action}</div>
+                    <div class="action-alt">${rec.first.alt || ''}</div>
+                </div>
+                <div class="action-scenario">
+                    <div class="action-scenario-title">상대 벳에 대응</div>
+                    <div class="action-primary ${rec.respond.cls}">${rec.respond.action}</div>
+                    <div class="action-alt">${rec.respond.alt || ''}</div>
+                </div>
+            </div>
+            <div class="action-reason">${rec.reason}</div>
+            <div class="action-legend">
+                <div class="action-legend-item"><span class="action-legend-dot" style="background:var(--red)"></span><span class="action-fold">폴드(포기)</span></div>
+                <div class="action-legend-item"><span class="action-legend-dot" style="background:var(--text-dim)"></span><span class="action-check">체크(넘기기)</span></div>
+                <div class="action-legend-item"><span class="action-legend-dot" style="background:var(--blue)"></span><span class="action-call">콜(따라가기)</span></div>
+                <div class="action-legend-item"><span class="action-legend-dot" style="background:var(--green)"></span><span class="action-bet">벳(베팅)</span></div>
+                <div class="action-legend-item"><span class="action-legend-dot" style="background:var(--gold)"></span><span class="action-raise">레이즈(올리기)</span></div>
+            </div>
+        `;
+    }
+
+    /* ============================================
        Card Selection Logic
     ============================================ */
     function selectCard(cardId) {
@@ -958,6 +1345,7 @@
         communityCards = [];
         usedCards.clear();
         simVersion++;
+        lastSimResult = null;
         renderSlots();
         renderPicker();
         renderWinRate(null);
@@ -975,9 +1363,11 @@
     /* ============================================
        Init
     ============================================ */
+    renderBettingStyleButtons();
     renderPlayerButtons();
     renderSlots();
     renderPicker();
+    renderActionRecommendation();
     </script>
 </body>
 </html>
